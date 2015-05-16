@@ -45,7 +45,6 @@ public class ExecutionListener extends RunListener
     {
         if (!description.toString().contains("initializationError")) {
             totalCount++;
-
         }
 
         //System.out.println("Finished execution of test case : "+ description.getMethodName());
@@ -58,7 +57,10 @@ public class ExecutionListener extends RunListener
     {
         if (!failure.getDescription().toString().contains("initializationError")) {
             failuresCount++;
-            System.out.println(failure.getTestHeader() + " : " + failure.getMessage());
+            System.out.println("Test failed: " + failure.getTestHeader() + " : "  + failure.getMessage());
+            if ( failure.getTrace() != null ) {
+                System.out.println(failure.getTrace());
+            }
         }
     }
 

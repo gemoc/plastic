@@ -2,23 +2,13 @@ package fr.irisa.diverse.unittesting;
 
 import org.jacoco.core.analysis.*;
 import org.jacoco.core.tools.ExecFileLoader;
-import org.junit.runner.Description;
-import org.junit.runner.JUnitCore;
-import org.junit.runner.Result;
-import org.junit.runner.notification.Failure;
-import org.junit.runner.notification.RunListener;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * The suite runner contains Junco coverage information and given a class, runs test so test covering the most
@@ -26,7 +16,7 @@ import java.util.Objects;
  */
 public class SuiteRunner {
 
-    private final Path srcFolder;
+    private final Path targetPath;
 
     private final Path testFolder;
 
@@ -38,76 +28,108 @@ public class SuiteRunner {
     private HashMap<String, Collection<String>> classCoverage;
 
     private boolean initialized = false;
+    private boolean errorsFound;
 
     /**
      * Run JUnit in all classes of a given directory
-     * @param srcFolder Sources being tested
-     * @param testFolder Path to the unit test classes
+     *
+     * @param srcFolder          Sources being tested
+     * @param testFolder         Path to the unit test classes
      * @param coverageInfoFolder Path to the Junco [https://github.com/marcelinorc/junco-provider.git]
      *                           coverage information (if any). Null otherwise.
      * @throws IOException
      */
     public SuiteRunner(Path srcFolder, Path testFolder, Path coverageInfoFolder) {
-        this.srcFolder = srcFolder;
+        this.targetPath = srcFolder;
         this.testFolder = testFolder;
         this.coverageInfoFolder = coverageInfoFolder;
     }
 
     /**
-     * Runs only the part of a unit test covering a particular clas
+     * Runs only the part of a unit test covering a particular class
      */
     public void runForClass(String className) throws IOException {
-        if ( classCoverage == null ) initCoverage(className, coverageInfoFolder);
+        errorsFound = false;
+        initCoverage(coverageInfoFolder);
         RunCaseFileVisitor runner = new RunCaseFileVisitor(testFolder);
-        for ( String c : classCoverage.get(className) ) {
-            runner.visitFile(Paths.get(c), null);
-        }
+        if (classCoverage.containsKey(className)) {
+            for (String c : classCoverage.get(className)) {
+                System.out.println("Running case: " + c);
+                FileVisitResult a = runner.visitFile(Paths.get(c), null);
+                if ( a.equals(FileVisitResult.TERMINATE) || runner.getListener().getFailuresCount() > 1 ) {
+                    errorsFound = true;
+                    System.out.println(className + "TEST FAILED. TERMINATING");
+                    return;
+                }
+            }
+            System.out.println("***********************************");
+            System.out.println("***********************************");
+            System.out.println("** " + className + ". OK!!. Continue****");
+            System.out.println("***********************************");
+            System.out.println("***********************************");
+        } else System.out.println(className + ". CLASS NOT COVERED");
     }
 
     /**
      * Gets all the classFiles covering a particular class
-     * @param className Canonical name for which we want the classes covering
+     *
      * @param coveragePath Folder containing the coverage
      * @return A collection of paths to files
      */
-    private void initCoverage(String className, Path coveragePath) throws IOException {
+    private void initCoverage(Path coveragePath) throws IOException {
 
-        classCoverage = new HashMap<>();
+        if (classCoverage == null) classCoverage = new HashMap<>();
+        else return;
 
-        for ( File f : coveragePath.toFile().listFiles()) {
-            if ( f.getName().endsWith(".exec") ) {
+        for (File f : coveragePath.toFile().listFiles()) {
+            if (f.getName().endsWith(".exec")) {
+
+                String testClassName = f.getName().substring(0, f.getName().lastIndexOf(".exec"));
+
                 ExecFileLoader loader = new ExecFileLoader();
                 loader.load(f);
                 final CoverageBuilder coverageBuilder = new CoverageBuilder();
                 final Analyzer analyzer = new Analyzer(loader.getExecutionDataStore(), coverageBuilder);
-                analyzer.analyzeAll(coveragePath.toFile());
-                IBundleCoverage bundle = coverageBuilder.getBundle(className);
+                analyzer.analyzeAll(targetPath.toFile());
+
+                IBundleCoverage bundle = coverageBuilder.getBundle(testClassName);
+
+                //org.easymock.tests.ArgumentToStringTest
                 for (final IPackageCoverage p : bundle.getPackages()) {
                     for (final IClassCoverage c : p.getClasses()) {
-                        Collection<String> paths;
-                        if ( classCoverage.containsKey(c.getName()) ) paths = classCoverage.get(c.getName());
-                        else {
-                            paths = new ArrayList<>();
-                            classCoverage.put(c.getName(), paths);
+                        if (c.getLineCounter().getCoveredCount() > 0) {
+                            Collection<String> paths;
+                            String className = c.getName().replace('/', '.');
+                            if (classCoverage.containsKey(className)) paths = classCoverage.get(className);
+                            else {
+                                paths = new HashSet<>();
+                                classCoverage.put(className, paths);
+                            }
+                            if (!paths.contains(f.getAbsolutePath())) {
+                                String testClassPath = testFolder + File.separator + f.getName().replace('.', '/');
+                                testClassPath = testClassPath.replace("/exec", ".class");
+                                paths.add(testClassPath);
+                            }
                         }
-                        if ( !paths.contains(f.getAbsolutePath()) ) paths.contains(f.getAbsolutePath());
                     }
                 }
             }
         }
+        //System.out.println("Finding coverage of " + className + ". DONE");
     }
 
 
     /**
      * Runs the complete suite test
+     *
      * @throws IOException
      */
     public void run() throws IOException {
         //Validate they are dirs
-        validate(srcFolder, testFolder, coverageInfoFolder);
+        validate(targetPath, testFolder, coverageInfoFolder);
 
         //Create a new class loader with class path containing the sources and tests
-        URL[] urls = new URL[]{srcFolder.toUri().toURL(), testFolder.toUri().toURL()};
+        URL[] urls = new URL[]{targetPath.toUri().toURL(), testFolder.toUri().toURL()};
         URLClassLoader child = new URLClassLoader(urls, Thread.currentThread().getContextClassLoader());
         Thread.currentThread().setContextClassLoader(child);
 
@@ -119,7 +141,6 @@ public class SuiteRunner {
     }
 
     /**
-     *
      * @param paths
      */
     private static void validate(Path... paths) {
@@ -129,5 +150,20 @@ public class SuiteRunner {
                 throw new IllegalArgumentException(String.format("%s is not a directory", path.toString()));
             }
         }
+    }
+
+    public boolean errorsFound() {
+        return errorsFound;
+    }
+
+    public boolean hasCoverage(String className) {
+
+        errorsFound = false;
+        try {
+            initCoverage(coverageInfoFolder);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return  (classCoverage.containsKey(className));
     }
 }

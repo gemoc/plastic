@@ -17,6 +17,12 @@ import java.util.HashMap;
  */
 public class GraphVisPrettyPrint {
 
+    public String getResult() {
+        return result;
+    }
+
+    private String result;
+
     public static class IdTag implements Tag {
 
         public static String ID_TAG = "id";
@@ -47,8 +53,13 @@ public class GraphVisPrettyPrint {
     /**
      * Prints the control flow in .Dot for GraphVis to visualize
      */
-    public void printControlFlow() {
-        StringBuilder sb = new StringBuilder("digraph ").append(body.getMethod().getName()).append(" { \n");
+    public String printControlFlow() {
+        StringBuilder sb = new StringBuilder("digraph ").
+                append(body.getMethod().getDeclaringClass().getName()).
+                append(".").
+                append(body.getMethod().getName()).
+                append(" { \n");
+        result = "";
         sb.append("start [shape=Mdiamond];\n");
         sb.append("node [fontsize = 8];\n");
         int i = 0;
@@ -90,8 +101,8 @@ public class GraphVisPrettyPrint {
             //System.out.println(u);
         }
         sb.append("}");
-        System.out.println(sb.toString());
-        System.out.println("*************");
+        result = sb.toString();
+        return result;
     }
 
 

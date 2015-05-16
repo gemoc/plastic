@@ -12,6 +12,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -78,11 +80,10 @@ public class SwapSootMain {
 
         //Process all projects
         for (String project : projects) {
-
             //Load local configuration for the project
             Properties p = new Properties();
             p.load(SwapSootMain.class.getClassLoader().getResourceAsStream(project));
-            String projectOutput = p.getProperty("output") + File.separator + target;
+            String projectOutput = p.getProperty("output"); //+ File.separator + target;
             String projectTarget = p.getProperty("project");
             testTarget  = p.getProperty("test.target", testTarget);
             coverageInfo = props.getProperty("coverage.info", coverageInfo);
@@ -93,10 +94,22 @@ public class SwapSootMain {
             resolver.DependencyResolver(projectTarget + "/pom.xml");
 
             //Resolve Paths
-            testTarget = projectTarget + File.separator + testTarget;
-            if ( coverageInfo != "" ) coverageInfo = projectTarget + File.separator + coverageInfo;
+            testTarget = projectOutput + File.separator + testTarget;
+            if ( !coverageInfo.isEmpty() && coverageInfo != null )
+                coverageInfo = projectTarget + File.separator + coverageInfo;
             if (!projectTarget.endsWith(File.pathSeparator)) projectTarget += File.separator;
             projectTarget += props.getProperty("target", target);
+
+            projectOutput = p.getProperty("output") + File.separator + target;
+
+            URLClassLoader child = new URLClassLoader(new URL[] {
+                    Paths.get(projectOutput).toUri().toURL(),
+                    Paths.get(testTarget).toUri().toURL(),
+            }, Thread.currentThread().getContextClassLoader());
+            Thread.currentThread().setContextClassLoader(child);
+
+            //Run the test suite first so we can know what test cases fails without manipulation and exclude them
+            //SuiteRunner runner = new SuiteRunner()
 
             runSootEachFile(method, projectTarget, testTarget, coverageInfo, projectOutput);
 
@@ -113,7 +126,7 @@ public class SwapSootMain {
      * Runs soot file by file
      */
     private static void runSootEachFile(String method, String projectTarget, String testTarget,
-                                        String projectOutput, String coveragePath) throws IOException {
+                                        String coveragePath, String projectOutput) throws IOException {
         SootFileVisitor visitor = new SootFileVisitor(method, projectTarget, testTarget, coveragePath, projectOutput);
         Files.walkFileTree(Paths.get(projectTarget), visitor);
     }
@@ -158,6 +171,7 @@ public class SwapSootMain {
                 "-cp", ".", "-pp", "-process-dir", projectTarget,
                 //Output options (https://ssebuild.cased.de/nightly/soot/doc/soot_options.htm#section_3)
                 "-d", projectOutput, "-allow-phantom-refs"};//, "-f", "J"};
+
         //Verbose output
         soot.Main.main(sootParams);
 

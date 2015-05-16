@@ -15,6 +15,8 @@ import java.util.List;
  */
 public abstract class Switchable {
 
+    protected int numberOfTransformation = 0;
+
     /**
      * Indicates if two units are in a def use chain
      *
@@ -107,4 +109,7 @@ public abstract class Switchable {
     public abstract void execute(Body body);
 
 
+    public int getNumberOfTransformation() {
+        return numberOfTransformation;
+    }
 }

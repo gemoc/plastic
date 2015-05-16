@@ -19,6 +19,10 @@ public class RunCaseFileVisitor extends SimpleFileVisitor<Path> {
      */
     private final Path testFolder;
 
+    public Path getTestFolder() {
+        return testFolder;
+    }
+
     /**
      * Listener to output the result of the tests
      */

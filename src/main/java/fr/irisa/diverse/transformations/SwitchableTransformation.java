@@ -11,8 +11,6 @@ import java.util.List;
  */
 public class SwitchableTransformation extends Switchable {
 
-    public int transfCount = 0;
-
     /**
      * Count how many statements can or can be switched in the body
      *
@@ -20,19 +18,26 @@ public class SwitchableTransformation extends Switchable {
      */
     @Override
     public void execute(Body body) {
-
-        if (transfCount > 50) return;
         try {
+            numberOfTransformation = 0;
             int lastSwitch = -1;
             List<Unit> ub = new ArrayList<>();
             ub.addAll(body.getUnits());
             for (int i = body.getMethod().getParameterCount() + 3; i < ub.size(); i++)
                 if (isSwitchAble(ub, i)) lastSwitch = i;
             if (lastSwitch != -1) {
-                body.getUnits().remove(ub.get(lastSwitch));
-                body.getUnits().insertBefore(ub.get(lastSwitch), ub.get(lastSwitch - 1));
-                //transfCount++;
+                Unit prev = ub.get(lastSwitch - 1);
+                Unit after = ub.get(lastSwitch);
+                body.getUnits().remove(after);
+                body.getUnits().insertBefore(after, prev);
+                numberOfTransformation++;
+                System.out.println("--------------------------------------");// + " with previous: " + prev);
                 System.out.println("Body tranformed: " + body.getMethod().getName());
+                System.out.println("Switched ");
+                System.out.println(prev); //+ " with previous: " + prev);
+                System.out.println("with posterior:");// + " with previous: " + prev);
+                System.out.println(after);// + " with previous: " + prev);
+                System.out.println("--------------------------------------");// + " with previous: " + prev);
             }
         } catch (RuntimeException e) {
             System.out.println("Error: " + e.getMessage());
