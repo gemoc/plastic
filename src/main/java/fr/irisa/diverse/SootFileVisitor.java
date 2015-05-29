@@ -97,6 +97,7 @@ public class SootFileVisitor extends SimpleFileVisitor<Path> {
 
                                 String[] gs = new String[2];
                                 gs[0] = new GraphVisPrettyPrint(body).printControlFlow();
+                                //System.out.println(gs[0]);
                                 switchable.execute(body);
                                 if (switchable.getNumberOfTransformation() > 0) {
                                     //Only register if there was changes
