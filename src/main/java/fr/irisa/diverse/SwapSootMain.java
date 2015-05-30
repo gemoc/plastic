@@ -6,7 +6,6 @@ import fr.irisa.diverse.transformations.SwitchableTransformation;
 import fr.irisa.diverse.unittesting.SuiteRunner;
 import org.apache.log4j.PropertyConfigurator;
 import soot.*;
-import soot.options.Options;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -23,95 +22,50 @@ import java.util.*;
  */
 public class SwapSootMain {
 
-    public static void configure(String classpath, String output) {
-        Options.v().set_verbose(true);
-        Options.v().set_process_dir(Arrays.asList(classpath));
-        Options.v().set_keep_line_number(true);
-        Options.v().set_src_prec(Options.src_prec_class);
-
-        String cp = System.getProperty("java.class.path");//.replace("\\", "/");
-        Options.v().set_soot_classpath(cp);
-        Options.v().set_prepend_classpath(true);
-        Options.v().set_allow_phantom_refs(true);
-        Options.v().set_output_dir(output);
-/*
-        PhaseOptions.v().setPhaseOption("bb", "off");
-        PhaseOptions.v().setPhaseOption("tag.ln", "on");
-        PhaseOptions.v().setPhaseOption("jj.a", "on");
-        PhaseOptions.v().setPhaseOption("jj.ule", "on");
-*/
-        Options.v().set_whole_program(false);
-    }
-
-    /*
-    public static void runFromAPI(Properties p) {
-        configure(p.getProperty("cp"), p.getProperty("output"));
-        Scene.v().loadNecessaryClasses();
-        SootClass c = Scene.v().loadClassAndSupport("fr.irisa.diverse.testclases.TestClass1");
-
-        c.setApplicationClass();
-        PackManager.v().runPacks();
-
-        // Retrieve the method and its body
-        SootMethod m = c.getMethodByName("foo");
-
-        Body b = m.retrieveActiveBody();
-        // Instruments bytecode
-        new GuaranteedDefs(new ExceptionalUnitGraph(b));
-    }*/
-
     public static void main(String[] args) throws Exception {
 
         PropertyConfigurator.configure("src/log4j.properties");
 
-        //I hate property files....
-        //Global configuration
-        Properties props = new Properties();
-        props.load(Main.class.getClassLoader().getResourceAsStream("projects/allprojects.properties"));
-        String target = props.getProperty("target");
-        String testTarget = props.getProperty("test.target");
-        String coverageInfo = props.getProperty("coverage.info", "");
+        //Global configuration.
+        //The global configuration resides in allprojects.properties file. There you may find 'default' properties
+        //that can be overrided later for all projects
+        ProjectProperties defaultProperties = new ProjectProperties();
+        defaultProperties.load(Main.class.getClassLoader().getResourceAsStream("projects/allprojects.properties"));
 
-        //Collect all project property info files
+        //Collect the path of all project property info files
         Collection<String> projects = new ArrayList<String>();
-        for (String pName : props.getProperty("projects").split(",")) {
+        for (String pName : defaultProperties.getProperty("projects").split(",")) {
             projects.add("projects/" + pName.trim() + ".properties");
         }
 
         //Process all projects
         for (String project : projects) {
-            //Load local configuration for the project
-            Properties p = new Properties();
-            p.load(SwapSootMain.class.getClassLoader().getResourceAsStream(project));
-            String projectOutput = p.getProperty("output"); //+ File.separator + target;
-            String projectTarget = p.getProperty("project");
-            testTarget  = p.getProperty("test.target", testTarget);
-            coverageInfo = props.getProperty("coverage.info", coverageInfo);
-            String method = p.getProperty("method", "");
 
+            //Load local configuration for the project being processed
+            ProjectProperties p = new ProjectProperties(defaultProperties);
+            p.load(SwapSootMain.class.getClassLoader().getResourceAsStream(project));
+            //String projectOutput = p.getProperty("output"); //+ File.separator + target;
+            //String projectTarget = p.getProperty("project");
+            //testTarget  = p.getProperty("test.target", testTarget);
+            //coverageInfo = defaultProperties.getProperty("coverage.info", coverageInfo);
+            //String method = p.getProperty("method", "");
+
+            //Add to the class path all the dependencies of the POM.xml for the project
             //Needed to run test and to reduce the amount of phantom classes
             MavenDependencyResolver resolver = new MavenDependencyResolver();
-            resolver.DependencyResolver(projectTarget + "/pom.xml");
-
-            //Resolve Paths
-            testTarget = projectOutput + File.separator + testTarget;
-            if ( !coverageInfo.isEmpty() && coverageInfo != null )
-                coverageInfo = projectTarget + File.separator + coverageInfo;
-            if (!projectTarget.endsWith(File.pathSeparator)) projectTarget += File.separator;
-            projectTarget += props.getProperty("target", target);
-
-            projectOutput = p.getProperty("output") + File.separator + target;
+            resolver.DependencyResolver(p.getProjectRoot() + "/pom.xml");
+            String projectOutput = p.getOutput() + File.separator + p.getTarget();
 
             URLClassLoader child = new URLClassLoader(new URL[] {
                     Paths.get(projectOutput).toUri().toURL(),
-                    Paths.get(testTarget).toUri().toURL(),
+                    Paths.get(p.getTestTarget()).toUri().toURL(),
             }, Thread.currentThread().getContextClassLoader());
             Thread.currentThread().setContextClassLoader(child);
 
             //Run the test suite first so we can know what test cases fails without manipulation and exclude them
             //SuiteRunner runner = new SuiteRunner()
 
-            runSootEachFile(method, projectTarget, testTarget, coverageInfo, projectOutput);
+            runSootEachFile(p.getMethodName(), p.getTarget(), p.getTestTarget(), p.getCoverageInfo(), projectOutput);
 
             /*
             SwitchableCounter counter = new SwitchableCounter();
@@ -131,18 +85,30 @@ public class SwapSootMain {
         Files.walkFileTree(Paths.get(projectTarget), visitor);
     }
 
-    private static void cleanUp(String projectOutput) {
-        //Clean up the output dir
-        /*
-        File outputFolder = new File(projectOutput);
-        for (File f : outputFolder.listFiles()) {
-            FileUtils.deleteDirectory(f);
-        }*/
+/*
+    private static void writeResume(String projectOutput, String fileName,
+                                    HashMap<String, SwitchableCounter.Counter> counters) throws IOException {
+        File fbody = new File(projectOutput + File.separator + "resume" + File.separator + fileName);
+        BufferedWriter writer = new BufferedWriter(new FileWriter(fbody));
+
+        String SEP = ";";
+        for (Map.Entry<String, SwitchableCounter.Counter> e : counters.entrySet()) {
+            writer.write(e.getKey() + SEP +
+                    (e.getValue().getTotal() - e.getValue().getSwitchable()) + SEP +
+                    e.getValue().getSwitchable() + SEP +
+                    ((float) e.getValue().getSwitchable() / (float) e.getValue().getTotal()) * 100.0f);
+            writer.write("\n");
+        }
+        writer.close();
     }
+*/
+
 
     /**
+     *
      * Runs the whole soot directory
      */
+    /*
     private static void runSootDirectorty(SwitchableCounter counter,
                                           String projectTarget, String projectOutput, String method) {
 
@@ -179,39 +145,8 @@ public class SwapSootMain {
         G.reset();
     }
 
-
-
     private static void runTest(String projectOutput, String testProject) throws IOException {
         new SuiteRunner(Paths.get(projectOutput), Paths.get(testProject), null).run();
     }
-
-    private static void writeCountResults(SwitchableCounter counter, String projectOutput, String project,
-                                          Properties p) throws IOException {
-        String projectName = project.substring(project.indexOf("/") + 1, project.lastIndexOf(".properties"));
-        writeResume(projectOutput, projectName + "-method.txt", counter.getMethodCounters());
-        writeResume(projectOutput, projectName + "-class.txt", counter.getClassCounters());
-        HashMap<String, SwitchableCounter.Counter> projectCounter = new HashMap<>();
-        projectCounter.put(projectName, counter.getProjectCounter());
-        writeResume(projectOutput, projectName + "-project.txt", projectCounter);
-
-        System.out.println(p.getProperty("description"));
-        System.out.println("All Jimple: " + counter.getProjectCounter().getTotal());
-        System.out.println("All Jimple Switchable: " + counter.getProjectCounter().getSwitchable());
-    }
-
-    private static void writeResume(String projectOutput, String fileName,
-                                    HashMap<String, SwitchableCounter.Counter> counters) throws IOException {
-        File fbody = new File(projectOutput + File.separator + "resume" + File.separator + fileName);
-        BufferedWriter writer = new BufferedWriter(new FileWriter(fbody));
-
-        String SEP = ";";
-        for (Map.Entry<String, SwitchableCounter.Counter> e : counters.entrySet()) {
-            writer.write(e.getKey() + SEP +
-                    (e.getValue().getTotal() - e.getValue().getSwitchable()) + SEP +
-                    e.getValue().getSwitchable() + SEP +
-                    ((float) e.getValue().getSwitchable() / (float) e.getValue().getTotal()) * 100.0f);
-            writer.write("\n");
-        }
-        writer.close();
-    }
+  */
 }

@@ -64,6 +64,75 @@ public class SootFileVisitor extends SimpleFileVisitor<Path> {
         this.runner = new SuiteRunner(Paths.get(projectTarget), Paths.get(testTarget), Paths.get(coverageInfo));
     }
 
+    /**
+     * Perform the transformation in one single class
+     * @param className Class to be transformed
+     * @returns The control and def-use chains of the code before and after transformation
+     */
+    private HashMap<String, String[]> transformClass(String className) {
+
+        //Execute soot on this class
+        //Transform class by class
+        SwitchableTransformation switchable = new SwitchableTransformation();
+        HashMap<String, String[]> graphs = new HashMap<>();
+
+        //This is Soot stuff
+        PackManager.v().getPack("jtp").add(
+                new Transform("jtp.myTransform", new BodyTransformer() {
+                    protected void internalTransform(Body body, String phase, Map options) {
+
+                        //This is where we start our logic
+
+                        //See if we want to analise only one method
+                        //If so, check that the method pass as parameters is the one
+                        //if we don't care, analyse all methods
+                        if (finalMethod.isEmpty() ||
+                                (body.getMethod().getName().equals(finalMethod) &&
+                                        body.getMethod().getDeclaringClass().getName().equals(methodClass))) {
+
+                            //Two control and def use graphs. One for before and the other for after
+                            String[] gs = new String[2];
+
+                            //One before transforming
+                            gs[0] = new GraphVisPrettyPrint(body).printControlFlow();
+
+                            //Actually execute the transformation
+                            switchable.execute(body);
+
+                            //If any transformation was done, register the changes
+                            if (switchable.getNumberOfTransformation() > 0) {
+                                //Only register if there was changes
+                                gs[1] = new GraphVisPrettyPrint(body).printControlFlow();
+                                //Register the before and after graphs
+                                graphs.put(body.getMethod().getName(), gs);
+                            }
+                        }
+                    }
+                }));
+
+        //Soots gets executed in this very very very old fashion way. Like a program with command line parameters
+        //just plain ugly. Check the parameters here (https://ssebuild.cased.de/nightly/soot/doc/soot_options.htm)
+        String[] sootParams = new String[]{
+                //Input options https://ssebuild.cased.de/nightly/soot/doc/soot_options.htm#section_2
+                "-cp", ".;" + targetFolder, "-pp", className,
+                //Output options (https://ssebuild.cased.de/nightly/soot/doc/soot_options.htm#section_3)
+                "-d", projectOutput, "-allow-phantom-refs"};//, "-f", "J"};
+        //Verbose output
+        soot.Main.main(sootParams);
+
+        //reset the soot global environment. Soot is so ugly
+        G.reset();
+
+        return graphs;
+    }
+
+    /**
+     * This method gets executed for each .class method, analysing each class separately
+     * @param file
+     * @param attrs
+     * @return
+     * @throws IOException
+     */
     @Override
     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 
@@ -85,49 +154,18 @@ public class SootFileVisitor extends SimpleFileVisitor<Path> {
                 return FileVisitResult.CONTINUE;
             }
 
-            //Transform class by class
-            SwitchableTransformation switchable = new SwitchableTransformation();
-            HashMap<String, String[]> graphs = new HashMap<>();
-            PackManager.v().getPack("jtp").add(
-                    new Transform("jtp.myTransform", new BodyTransformer() {
-                        protected void internalTransform(Body body, String phase, Map options) {
-                            if (finalMethod.isEmpty() ||
-                                    (body.getMethod().getName().equals(finalMethod) &&
-                                            body.getMethod().getDeclaringClass().getName().equals(methodClass))) {
+            //Transform one single class
+            //Returns the graphs of the code before and after transformation
+            //in a format easy for graphviz to visualize
+            HashMap<String, String[]> graphs = transformClass(className);
 
-                                String[] gs = new String[2];
-                                gs[0] = new GraphVisPrettyPrint(body).printControlFlow();
-                                //System.out.println(gs[0]);
-                                switchable.execute(body);
-                                if (switchable.getNumberOfTransformation() > 0) {
-                                    //Only register if there was changes
-                                    gs[1] = new GraphVisPrettyPrint(body).printControlFlow();
-                                    graphs.put(body.getMethod().getName(), gs);
-                                }
-                            }
-                            //counter.execute(body);
-                        }
-                    }));
-
-            //Params oh yes, is so beautiful (https://ssebuild.cased.de/nightly/soot/doc/soot_options.htm)
-            String[] sootParams = new String[]{
-                    //Input options https://ssebuild.cased.de/nightly/soot/doc/soot_options.htm#section_2
-                    "-cp", ".;" + targetFolder, "-pp", className,
-                    //Output options (https://ssebuild.cased.de/nightly/soot/doc/soot_options.htm#section_3)
-                    "-d", projectOutput, "-allow-phantom-refs"};//, "-f", "J"};
-            //Verbose output
-            soot.Main.main(sootParams);
-
+            //Once the classes has been transformed, we run the test cases
+            //If the graph.size > means that we could analyze at least one method
             if (graphs.size() > 0) {
-                //If the graph.size > means that we could analyze at least one method
 
                 Path coveragePath = Paths.get(coverageInfo);
                 if (coveragePath.toFile().exists()) runner.runForClass(className); //Run the tests of this class only
                 else runner.run(); //No coverage info, run all tests
-
-                //reset the counter
-                G.reset();
-
                 //Stop at the first sign of trouble
                 if (!runner.errorsFound()) return FileVisitResult.CONTINUE;
                 else {
@@ -138,7 +176,6 @@ public class SootFileVisitor extends SimpleFileVisitor<Path> {
                     return FileVisitResult.TERMINATE;
                 }
             } else {
-                G.reset();
                 return FileVisitResult.CONTINUE;
             }
         } catch (Exception e) {

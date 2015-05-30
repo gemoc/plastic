@@ -16,10 +16,19 @@ import java.util.*;
  */
 public class SuiteRunner {
 
-    private final Path targetPath;
+    /**
+     * Classes under test folder
+     */
+    private final Path targetFolder;
 
+    /**
+     *  Test cases folder
+     */
     private final Path testFolder;
 
+    /**
+     * Coverage information folder
+     */
     private final Path coverageInfoFolder;
 
     /**
@@ -27,7 +36,6 @@ public class SuiteRunner {
      */
     private HashMap<String, Collection<String>> classCoverage;
 
-    private boolean initialized = false;
     private boolean errorsFound;
 
     /**
@@ -40,7 +48,7 @@ public class SuiteRunner {
      * @throws IOException
      */
     public SuiteRunner(Path srcFolder, Path testFolder, Path coverageInfoFolder) {
-        this.targetPath = srcFolder;
+        this.targetFolder = srcFolder;
         this.testFolder = testFolder;
         this.coverageInfoFolder = coverageInfoFolder;
     }
@@ -90,7 +98,7 @@ public class SuiteRunner {
                 loader.load(f);
                 final CoverageBuilder coverageBuilder = new CoverageBuilder();
                 final Analyzer analyzer = new Analyzer(loader.getExecutionDataStore(), coverageBuilder);
-                analyzer.analyzeAll(targetPath.toFile());
+                analyzer.analyzeAll(targetFolder.toFile());
 
                 IBundleCoverage bundle = coverageBuilder.getBundle(testClassName);
 
@@ -126,10 +134,10 @@ public class SuiteRunner {
      */
     public void run() throws IOException {
         //Validate they are dirs
-        validate(targetPath, testFolder, coverageInfoFolder);
+        validate(targetFolder, testFolder, coverageInfoFolder);
 
         //Create a new class loader with class path containing the sources and tests
-        URL[] urls = new URL[]{targetPath.toUri().toURL(), testFolder.toUri().toURL()};
+        URL[] urls = new URL[]{targetFolder.toUri().toURL(), testFolder.toUri().toURL()};
         URLClassLoader child = new URLClassLoader(urls, Thread.currentThread().getContextClassLoader());
         Thread.currentThread().setContextClassLoader(child);
 
