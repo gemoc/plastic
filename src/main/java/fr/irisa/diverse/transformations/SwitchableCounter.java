@@ -1,5 +1,6 @@
 package fr.irisa.diverse.transformations;
 
+import fr.irisa.diverse.transformations.rules.DefUseChain;
 import soot.Body;
 import soot.Unit;
 
@@ -10,7 +11,7 @@ import java.util.List;
 /**
  * Created by marodrig on 23/04/2015.
  */
-public class SwitchableCounter extends Switchable {
+public class SwitchableCounter extends Transformation {
 
 
     public static class Counter {
@@ -68,7 +69,7 @@ public class SwitchableCounter extends Switchable {
     @Override
     public void execute(Body body) {
 
-
+        DefUseChain rule = new DefUseChain();
 
         String className = body.getMethod().getDeclaringClass().getName();
         Counter classCounter;
@@ -77,7 +78,6 @@ public class SwitchableCounter extends Switchable {
             classCounters.put(className, classCounter);
         } else classCounter = classCounters.get(className);
 
-
         Counter bodyCounter = new Counter();
         bodyCounter.total = 3;
         methodCounters.put(className + "." + body.getMethod().getName(), bodyCounter);
@@ -85,7 +85,7 @@ public class SwitchableCounter extends Switchable {
         List<Unit> ub = new ArrayList<>();
         ub.addAll(body.getUnits());
         for (int i = body.getMethod().getParameterCount(); i < ub.size(); i++) {
-            if (isSwitchAble(ub, i)) bodyCounter.switchable++;
+            if (rule.apply(ub, i)) bodyCounter.switchable++;
             else if (isMaybeSwitchable(ub, i)) bodyCounter.maybeSwitchable++;
             bodyCounter.total++;
         }

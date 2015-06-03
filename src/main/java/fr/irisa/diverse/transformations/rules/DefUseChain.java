@@ -1,21 +1,16 @@
-package fr.irisa.diverse.transformations;
+package fr.irisa.diverse.transformations.rules;
 
-import soot.Body;
 import soot.Unit;
 import soot.ValueBox;
 import soot.jimple.Stmt;
 import soot.jimple.internal.JAssignStmt;
-import soot.jimple.internal.JReturnStmt;
-import soot.jimple.internal.JReturnVoidStmt;
 
 import java.util.List;
 
 /**
- * Created by marodrig on 04/05/2015.
+ * Created by marodrig on 03/06/2015.
  */
-public abstract class Switchable {
-
-    protected int numberOfTransformation = 0;
+public class DefUseChain implements Rule {
 
     /**
      * Indicates if two units are in a def use chain
@@ -36,25 +31,8 @@ public abstract class Switchable {
         return false;
     }
 
-    /**
-     * Indicates that a unit maybe switch able within the body
-     *
-     * @param units units of the box
-     * @param index Index of the unit
-     * @return True if switchable, false otherwise
-     */
-    protected boolean isMaybeSwitchable(List<Unit> units, int index) {
-        return false;
-    }
-
-    /**
-     * Indicates if a unit is switchable within the body
-     *
-     * @param units units of the box
-     * @param index Index of the unit
-     * @return True if switchable, false otherwise
-     */
-    protected boolean isSwitchAble(List<Unit> units, int index) {
+    @Override
+    public boolean apply(List<Unit> units, int index) {
         if (index == 0) return false;
 
         Unit u = units.get(index);
@@ -65,7 +43,7 @@ public abstract class Switchable {
         Unit prev = units.get(index - 1);
 
         //Keep it to the very minimum initially
-        if ( !(u instanceof JAssignStmt) || !(prev instanceof JAssignStmt) )return false;
+        if (!(u instanceof JAssignStmt) || !(prev instanceof JAssignStmt)) return false;
 
         //TODO: better analyse these cases!!!!
         //if (prev.branches()) return false;
@@ -74,7 +52,7 @@ public abstract class Switchable {
         if (inDefUseChain(prev, u)) return false;
 
 
-        Stmt s = (Stmt)u;
+        Stmt s = (Stmt) u;
         if (s.branches() || s.getBoxesPointingToThis().size() > 0) {
             return false;
 /*
@@ -101,15 +79,7 @@ public abstract class Switchable {
                 }
             }*/
         }
-
-
         return true;
     }
 
-    public abstract void execute(Body body);
-
-
-    public int getNumberOfTransformation() {
-        return numberOfTransformation;
-    }
 }
