@@ -1,6 +1,5 @@
 package fr.irisa.diverse;
 
-import com.sun.deploy.panel.ExceptionListDialog;
 import fr.irisa.diverse.printing.GraphVisPrettyPrint;
 import fr.irisa.diverse.transformations.SwitchableTransformation;
 import fr.irisa.diverse.unittesting.SuiteRunner;
@@ -10,7 +9,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 

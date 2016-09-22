@@ -1,15 +1,11 @@
 package fr.irisa.diverse;
 
 import fr.inria.diversify.buildSystem.maven.MavenDependencyResolver;
-import fr.irisa.diverse.transformations.SwitchableCounter;
-import fr.irisa.diverse.transformations.SwitchableTransformation;
 import fr.irisa.diverse.unittesting.SuiteRunner;
 import org.apache.log4j.PropertyConfigurator;
 import soot.*;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
